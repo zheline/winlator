@@ -69,12 +69,43 @@ public abstract class ImageFsInstaller {
             if (success) {
                 imageFs.createImgVersionFile(LATEST_VERSION);
                 resetContainerImgVersions(activity);
+
+                try {
+                    // 把 network.reg 寫到容器 /root 資料夾
+                    File rootHomeDir = new File(rootDir, "root");
+                    rootHomeDir.mkdirs(); // 確保資料夾存在
+                    File regFile = new File(rootHomeDir, "network.reg");
+                    FileUtils.writeString(regFile, getNetworkRegText());
+                
+                    String command = "proot -0 -r " + rootDir.getAbsolutePath() +
+                        " -b /dev -b /proc -b /sys:/sys -b /sdcard:/sdcard -w /root " +
+                        " /opt/box64/bin/box64 /opt/wine/bin/wine regedit Z:\\network.reg";
+                
+                    Process process = Runtime.getRuntime().exec(command);
+                    int result = process.waitFor(); // 等待完成
+                    if (result != 0) {
+                        AppUtils.showToast(activity, "Regedit import failed");
+                    }
+                } catch (IOException | InterruptedException e) {
+                    e.printStackTrace();
+                    AppUtils.showToast(activity, "Error running regedit: " + e.getMessage());
+                }
+
             }
             else AppUtils.showToast(activity, R.string.unable_to_install_system_files);
 
             dialog.closeOnUiThread();
         });
     }
+
+    private static String getNetworkRegText() {
+        return "Windows Registry Editor Version 5.00\n\n" +
+            "[HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}\\0000]\n" +
+            "\"DriverDesc\"=\"Virtual Ethernet Adapter\"\n" +
+            "\"NetCfgInstanceId\"=\"{DEADBEEF-0000-1111-2222-DEADBEEF0000}\"\n" +
+            "\"NetworkAddress\"=\"001122334455\"\n";
+    }
+
 
     public static void installIfNeeded(final MainActivity activity) {
         ImageFs imageFs = ImageFs.find(activity);
